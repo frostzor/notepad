@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <title>Minimal Notepad MVP</title>
+
+  <!-- ИКОНКИ: Remix Icon -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@4.3.0/fonts/remixicon.css">
+
+  <style>
+    :root {
+      --bg: #111;
+      --bg-alt: #181818;
+      --fg: #f5f5f5;
+      --fg-muted: #b0b0b0;
+      --accent: #4dabf7;
+      --toolbar-bg: #222;
+      --border: #333;
+    }
+
+    body.light {
+      --bg: #f5f5f5;
+      --bg-alt: #ffffff;
+      --fg: #222;
+      --fg-muted: #666;
+      --accent: #1c7ed6;
+      --toolbar-bg: #ffffff;
+      --border: #ddd;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      background: var(--bg);
+      color: var(--fg);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .app {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+
+    /* ВЕРТИКАЛЬНЫЕ ФУНКЦИОНАЛЬНЫЕ КНОПКИ СЛЕВА ВВЕРХУ */
+    .side-toolbar {
+      position: fixed;
+      left: 12px;
+      top: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 900;
+      transform: none;
+    }
+
+    .icon-btn {
+      border: 1px solid var(--border);
+      background: var(--bg-alt);
+      color: var(--fg-muted);
+      padding: 6px;
+      border-radius: 999px;
+      cursor: pointer;
+      font-size: 16px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease,
+                  transform 0.1s ease, box-shadow 0.15s ease;
+      user-select: none;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+    }
+
+    .icon-btn i {
+      font-size: 18px;
+      line-height: 1;
+    }
+
+    .icon-btn:hover {
+      background: var(--bg);
+      color: var(--fg);
+      border-color: var(--accent);
+      transform: translateY(-1px);
+      box-shadow: 0 6px 18px rgba(0,0,0,0.55);
+    }
+
+    /* ПОЛЕ НАЗВАНИЯ ДОКУМЕНТА ВВЕРХУ ПО ЦЕНТРУ (БЕЗ РАМКИ) */
+    .title-input {
+      position: fixed;
+      top: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: transparent;
+      color: var(--fg);
+      border-radius: 999px;
+      border: none;
+      padding: 6px 16px;
+      font-size: 18px;
+      text-align: center;
+      min-width: 240px;
+      max-width: 60%;
+      outline: none;
+      opacity: 0.7;
+      backdrop-filter: blur(8px);
+    }
+
+    body.light .title-input {
+      background: transparent;
+      border: none;
+    }
+
+    .title-input::placeholder {
+      color: var(--fg-muted);
+    }
+
+    .title-input:focus {
+      opacity: 1;
+    }
+
+    .editor-wrapper {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      padding: 72px 12px 32px; /* отступ сверху под поле названия */
+      overflow: auto;
+    }
+
+    .editor {
+      width: 100%;
+      max-width: 800px;
+      background: transparent;
+      color: var(--fg);
+      outline: none;
+      border: none;
+      padding: 0;
+      font-size: 18px;
+      line-height: 1.6;
+    }
+
+    .editor:empty::before {
+      content: "Начни писать здесь...";
+      color: var(--fg-muted);
+    }
+
+    h1, h2, h3 {
+      margin: 0.6em 0 0.3em;
+    }
+
+    p {
+      margin: 0.2em 0;
+    }
+
+    a {
+      color: var(--accent);
+    }
+
+    /* floating selection toolbar */
+    .selection-toolbar {
+      position: absolute;
+      padding: 4px;
+      background: var(--toolbar-bg);
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      box-shadow: 0 8px 30px rgba(0,0,0,0.4);
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      z-index: 1000;
+      transform: translate(-50%, -120%);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.1s ease;
+    }
+
+    .selection-toolbar.visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .toolbar-btn,
+    .toolbar-select {
+      border-radius: 999px;
+      border: none;
+      background: transparent;
+      color: var(--fg);
+      padding: 2px 6px;
+      font-size: 14px;
+      cursor: pointer;
+      user-select: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .toolbar-btn i {
+      font-size: 16px;
+      line-height: 1;
+    }
+
+    .toolbar-btn:hover {
+      background: rgba(255,255,255,0.08);
+    }
+
+    .toolbar-btn.active {
+      background: rgba(77,171,247,0.18);
+      color: var(--accent);
+    }
+
+    .toolbar-separator {
+      width: 1px;
+      height: 18px;
+      background: var(--border);
+      margin: 0 2px;
+    }
+
+    .toolbar-select {
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--bg-alt);
+      padding-inline: 8px;
+    }
+
+    .toolbar-select:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    /* СЧЁТЧИК СИМВОЛОВ ВНИЗУ СПРАВА */
+    .char-counter {
+      position: fixed;
+      right: 16px;
+      bottom: 12px;
+      font-size: 12px;
+      color: var(--fg-muted);
+      background: rgba(0,0,0,0.35);
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.08);
+      backdrop-filter: blur(8px);
+      z-index: 900;
+    }
+
+    body.light .char-counter {
+      background: rgba(255,255,255,0.7);
+      border-color: rgba(0,0,0,0.06);
+    }
+
+    @media (max-width: 600px) {
+      .editor-wrapper {
+        padding: 72px 10px 24px;
+      }
+      .editor {
+        font-size: 16px;
+      }
+      .side-toolbar {
+        left: 8px;
+      }
+      .title-input {
+        top: 10px;
+        font-size: 16px;
+        min-width: 180px;
+      }
+    }
+  </style>
+</head>
+<body class="dark">
+  <div class="app" id="app-root">
+
+    <!-- ВЕРТИКАЛЬНЫЙ БЛОК ФУНКЦИОНАЛЬНЫХ КНОПОК -->
+    <div class="side-toolbar">
+      <button class="icon-btn" id="themeToggle" title="Светлая/тёмная тема">
+        <i class="ri-contrast-2-line"></i>
+      </button>
+      <button class="icon-btn" id="fullscreenToggle" title="На весь экран">
+        <i class="ri-fullscreen-line"></i>
+      </button>
+      <button class="icon-btn" id="saveDoc" title="Сохранить как .doc">
+        <i class="ri-save-3-line"></i>
+      </button>
+    </div>
+
+    <!-- НАЗВАНИЕ ДОКУМЕНТА -->
+    <input
+      id="docTitle"
+      class="title-input"
+      type="text"
+      placeholder="What is my name?"
+    />
+
+    <!-- ОСНОВНОЕ ПОЛЕ РЕДАКТОРА -->
+    <div class="editor-wrapper">
+      <div id="editor" class="editor" contenteditable="true">
+        <h1>Тестовый заголовок</h1>
+        <p>Это тестовый текст в минималистичном веб-блокноте.</p>
+      </div>
+    </div>
+
+    <!-- всплывающий тулбар форматирования -->
+    <div id="selectionToolbar" class="selection-toolbar">
+      <button class="toolbar-btn" data-cmd="bold" title="Жирный">
+        <i class="ri-bold"></i>
+      </button>
+      <button class="toolbar-btn" data-cmd="italic" title="Курсив">
+        <i class="ri-italic"></i>
+      </button>
+      <button class="toolbar-btn" id="linkBtn" title="Вставить ссылку">
+        <i class="ri-link"></i>
+      </button>
+      <button class="toolbar-btn" id="clearFormatBtn" title="Сбросить форматирование">
+        <i class="ri-format-clear"></i>
+      </button>
+
+      <div class="toolbar-separator"></div>
+
+      <button class="toolbar-btn" data-heading="h1" title="Заголовок H1">
+        <i class="ri-h-1"></i>
+      </button>
+      <button class="toolbar-btn" data-heading="h2" title="Заголовок H2">
+        <i class="ri-h-2"></i>
+      </button>
+      <button class="toolbar-btn" data-heading="h3" title="Заголовок H3">
+        <i class="ri-h-3"></i>
+      </button>
+
+      <div class="toolbar-separator"></div>
+
+      <select class="toolbar-select" id="fontSizeSelect" title="Размер шрифта">
+        <option value="">Размер</option>
+        <option value="12">12</option>
+        <option value="14">14</option>
+        <option value="16">16</option>
+        <option value="18">18</option>
+        <option value="24">24</option>
+        <option value="32">32</option>
+      </select>
+    </div>
+
+    <!-- СЧЁТЧИК СИМВОЛОВ -->
+    <div id="charCounter" class="char-counter">0 символів</div>
+  </div>
+
+  <script>
+    const body = document.body;
+    const appRoot = document.getElementById('app-root');
+    const editor = document.getElementById('editor');
+    const themeToggle = document.getElementById('themeToggle');
+    const fullscreenToggle = document.getElementById('fullscreenToggle');
+    const saveDocBtn = document.getElementById('saveDoc');
+    const toolbar = document.getElementById('selectionToolbar');
+    const fontSizeSelect = document.getElementById('fontSizeSelect');
+    const linkBtn = document.getElementById('linkBtn');
+    const clearFormatBtn = document.getElementById('clearFormatBtn');
+    const charCounter = document.getElementById('charCounter');
+    const titleInput = document.getElementById('docTitle');
+
+    // --- Восстановление текста при загрузке ---
+    const savedText = localStorage.getItem("notepad-text");
+    if (savedText) {
+      editor.innerHTML = savedText;
+    }
+
+    // --- Восстановление названия при загрузке ---
+    const savedTitle = localStorage.getItem("notepad-title");
+    if (savedTitle) {
+      titleInput.value = savedTitle;
+    }
+
+    // ------- счётчик символов -------
+    function updateCharCount() {
+      const text = editor.innerText || "";
+      charCounter.textContent = text.length + " символів";
+    }
+
+    editor.addEventListener('input', updateCharCount);
+
+    // ------- Theme toggle -------
+    themeToggle.addEventListener('click', () => {
+      body.classList.toggle('light');
+      body.classList.toggle('dark');
+    });
+
+    // ------- Fullscreen toggle -------
+    fullscreenToggle.addEventListener('click', () => {
+      if (!document.fullscreenElement) {
+        appRoot.requestFullscreen?.();
+      } else {
+        document.exitFullscreen?.();
+      }
+    });
+
+    // ------- Save as .doc -------
+    function saveAsDoc() {
+      const title = titleInput.value || 'Notepad Document';
+
+      const content = `
+        <html>
+          <head>
+            <meta charset="UTF-8">
+            <title>${title}</title>
+          </head>
+          <body>
+            <h1>${title}</h1>
+            ${editor.innerHTML}
+          </body>
+        </html>`;
+
+      const blob = new Blob(['\ufeff', content], {
+        type: 'application/msword'
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = (title || 'note') + '.doc';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }
+
+    saveDocBtn.addEventListener('click', saveDoc);
+
+    function saveDoc() {
+      saveAsDoc();
+    }
+
+    // ------- Selection helpers -------
+    function getSelectionInEditor() {
+      const sel = window.getSelection();
+      if (!sel || sel.rangeCount === 0) return null;
+
+      const range = sel.getRangeAt(0);
+      if (!editor.contains(range.commonAncestorContainer)) return null;
+
+      if (sel.isCollapsed) return null;
+      return { sel, range };
+    }
+
+    function updateToolbarPosition() {
+      const selectionInfo = getSelectionInEditor();
+      if (!selectionInfo) {
+        toolbar.classList.remove('visible');
+        return;
+      }
+
+      const rect = selectionInfo.range.getBoundingClientRect();
+      if (!rect || (rect.x === 0 && rect.y === 0 && rect.width === 0 && rect.height === 0)) {
+        toolbar.classList.remove('visible');
+        return;
+      }
+
+      const toolbarX = rect.left + rect.width / 2;
+      const toolbarY = rect.top + window.scrollY;
+
+      toolbar.style.left = toolbarX + 'px';
+      toolbar.style.top = toolbarY + 'px';
+      toolbar.classList.add('visible');
+    }
+
+    // аккуратная обёртка выделения в элемент
+    function wrapRange(range, wrapper) {
+      try {
+        range.surroundContents(wrapper);
+      } catch (e) {
+        const contents = range.extractContents();
+        wrapper.appendChild(contents);
+        range.insertNode(wrapper);
+      }
+    }
+
+    document.addEventListener('mouseup', () => {
+      setTimeout(updateToolbarPosition, 0);
+    });
+
+    editor.addEventListener('keyup', () => {
+      setTimeout(updateToolbarPosition, 0);
+    });
+
+    // Скрывать toolbar при клике вне редактора
+    document.addEventListener('mousedown', (e) => {
+      if (!toolbar.contains(e.target) && !editor.contains(e.target)) {
+        toolbar.classList.remove('visible');
+      }
+    });
+
+    // ------- Formatting commands (bold, italic, link) -------
+    function exec(cmd, value = null) {
+      document.execCommand(cmd, false, value);
+      editor.focus();
+      updateToolbarPosition();
+      updateCharCount();
+    }
+
+    // bold / italic
+    toolbar.querySelectorAll('[data-cmd]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const cmd = btn.getAttribute('data-cmd');
+        exec(cmd);
+      });
+    });
+
+    // link insert
+    linkBtn.addEventListener('click', () => {
+      const selectionInfo = getSelectionInEditor();
+      if (!selectionInfo) return;
+
+      let url = prompt('Введите URL ссылки:', 'https://');
+      if (!url) return;
+      if (!/^https?:\/\//i.test(url)) {
+        url = 'https://' + url;
+      }
+      exec('createLink', url);
+    });
+
+    // ------- Заголовки H1/H2/H3 только для выделения -------
+    function applyHeading(level) {
+      const selectionInfo = getSelectionInEditor();
+      if (!selectionInfo) return;
+      const { range } = selectionInfo;
+
+      const span = document.createElement('span');
+      span.dataset.heading = level;
+      span.style.display = 'block';
+      span.style.fontWeight = '700';
+      span.style.margin = '0.6em 0 0.3em';
+
+      if (level === 'h1') {
+        span.style.fontSize = '32px';
+      } else if (level === 'h2') {
+        span.style.fontSize = '26px';
+      } else {
+        span.style.fontSize = '20px';
+      }
+
+      wrapRange(range, span);
+      editor.focus();
+      updateToolbarPosition();
+      updateCharCount();
+    }
+
+    toolbar.querySelectorAll('[data-heading]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const level = btn.getAttribute('data-heading');
+        applyHeading(level);
+      });
+    });
+
+    // ------- Размер шрифта по цифрам (px) -------
+    function applyFontSize(px) {
+      const selectionInfo = getSelectionInEditor();
+      if (!selectionInfo) return;
+      const { range } = selectionInfo;
+
+      const span = document.createElement('span');
+      span.style.fontSize = px + 'px';
+
+      wrapRange(range, span);
+      editor.focus();
+      updateToolbarPosition();
+      updateCharCount();
+    }
+
+    fontSizeSelect.addEventListener('change', () => {
+      const value = fontSizeSelect.value;
+      if (value) {
+        applyFontSize(parseInt(value, 10));
+      }
+      fontSizeSelect.selectedIndex = 0;
+    });
+
+    // ------- Сброс форматирования выделенного текста -------
+    clearFormatBtn.addEventListener('click', () => {
+      const selectionInfo = getSelectionInEditor();
+      if (!selectionInfo) return;
+      const { range } = selectionInfo;
+
+      const text = range.toString();
+      range.deleteContents();
+      range.insertNode(document.createTextNode(text));
+      editor.normalize();
+      editor.focus();
+      updateToolbarPosition();
+      updateCharCount();
+    });
+
+    // --- Автосохранение текста ---
+    editor.addEventListener("input", () => {
+      localStorage.setItem("notepad-text", editor.innerHTML);
+    });
+
+    // --- Автосохранение названия ---
+    titleInput.addEventListener("input", () => {
+      localStorage.setItem("notepad-title", titleInput.value);
+    });
+
+    // При загрузке — тёмная тема и актуальный счетчик
+    body.classList.remove('light');
+    body.classList.add('dark');
+    updateCharCount();
+  </script>
+</body>
+</html>
+
+
+
