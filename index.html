@@ -282,6 +282,10 @@
       <button class="icon-btn" id="saveDoc" title="Сохранить как .doc">
         <i class="ri-save-3-line"></i>
       </button>
+      <!-- НОВАЯ КНОПКА SHARE В БОКОВОМ БАРЕ -->
+      <button class="icon-btn" id="shareBtn" title="Поделиться заметкой">
+        <i class="ri-share-forward-line"></i>
+      </button>
     </div>
 
     <!-- НАЗВАНИЕ ДОКУМЕНТА -->
@@ -357,6 +361,7 @@
     const clearFormatBtn = document.getElementById('clearFormatBtn');
     const charCounter = document.getElementById('charCounter');
     const titleInput = document.getElementById('docTitle');
+    const shareBtn = document.getElementById('shareBtn');
 
     // --- Восстановление текста при загрузке ---
     const savedText = localStorage.getItem("notepad-text");
@@ -597,13 +602,92 @@
       localStorage.setItem("notepad-title", titleInput.value);
     });
 
-    // При загрузке — тёмная тема и актуальный счетчик
+    // ------- SHARE: отправка текста на /api/share -------
+    async function shareNote() {
+      const html = editor.innerHTML.trim();
+      if (!html) {
+        alert("Нечего шэрить – текст пустой 🙂");
+        return;
+      }
+
+      let ttlStr = prompt(
+        "На сколько минут сделать ссылку активной? (по умолчанию 60)",
+        "60"
+      );
+      if (ttlStr === null) return; // отмена
+
+      let ttl = parseInt(ttlStr, 10);
+      if (isNaN(ttl) || ttl <= 0) ttl = 60;
+
+      try {
+        const res = await fetch("/api/share", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            content: html,
+            ttlMinutes: ttl,
+          }),
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          console.error("/api/share error:", data);
+          alert("Ошибка при создании ссылки");
+          return;
+        }
+
+        const shareUrl = `${window.location.origin}?shared=${encodeURIComponent(
+          data.id
+        )}`;
+
+        try {
+          await navigator.clipboard.writeText(shareUrl);
+          alert(
+            `Ссылка создана и скопирована в буфер:\n\n${shareUrl}\n\nАктивна ~${data.ttlMinutes} мин.`
+          );
+        } catch (e) {
+          alert(
+            `Ссылка создана (скопируй вручную):\n\n${shareUrl}\n\nАктивна ~${data.ttlMinutes} мин.`
+          );
+        }
+      } catch (err) {
+        console.error("shareNote error:", err);
+        alert("Не удалось связаться с сервером");
+      }
+    }
+
+    shareBtn.addEventListener("click", shareNote);
+
+    // ------- Загрузка текста по shared-ссылке -------
+    async function loadSharedIfAny() {
+      const params = new URLSearchParams(window.location.search);
+      const sharedId = params.get("shared");
+      if (!sharedId) return;
+
+      try {
+        const res = await fetch(`/api/share?id=${encodeURIComponent(sharedId)}`);
+        const data = await res.json();
+
+        if (!res.ok) {
+          console.warn("Shared load error:", data);
+          alert("Ссылка недействительна или уже истекла");
+          return;
+        }
+
+        editor.innerHTML = data.content || "";
+        updateCharCount();
+      } catch (err) {
+        console.error("loadSharedIfAny error:", err);
+        alert("Ошибка при загрузке shared-ссылки");
+      }
+    }
+
+    // При загрузке — тёмная тема, актуальный счетчик и проверка shared ссылки
     body.classList.remove('light');
     body.classList.add('dark');
     updateCharCount();
+    loadSharedIfAny();
   </script>
 </body>
 </html>
-
-
 
